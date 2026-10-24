@@ -13,63 +13,51 @@ struct ContentView: View {
                 SongMarker(name: "Verse 1", time: 18),
                 SongMarker(name: "Chorus", time: 57)
             ],
-            lyrics: [
-                LyricLine(text: "Import lyrics from TXT, LRC or SRT")
-            ],
-            references: [],
-            shots: [
-                VideoShot(start: 0, duration: 5, prompt: "Opening establishing shot")
-            ]
+            lyrics: [LyricLine(text: "Import lyrics from TXT, LRC or SRT")],
+            shots: [VideoShot(start: 0, duration: 5, prompt: "Opening establishing shot")]
         )
     ]
 
     @State private var selection: SongProject.ID?
+    @State private var section: WorkspaceSection = .overview
     @State private var showLogicImporter = false
     @State private var showLyricsImporter = false
-    @State private var showMatamike = false
     @State private var importError: String?
+    @State private var liveEntries: [LiveSetEntry] = []
+    @StateObject private var renderQueue = RenderQueueModel()
 
     private let logicImporter = LogicImportService()
     private let lyricsImporter = LyricsImportService()
 
     var body: some View {
-        NavigationSplitView {
-            List(projects, selection: $selection) { project in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(project.title)
-                        .font(.headline)
-                    Text(project.artist.isEmpty ? "Unknown artist" : project.artist)
-                        .foregroundStyle(.secondary)
-                }
-                .tag(project.id)
-            }
-            .navigationTitle("Matalogic")
-            .toolbar {
-                Button {
-                    let project = SongProject(title: "New Song")
-                    projects.append(project)
-                    selection = project.id
-                } label: {
-                    Label("New Song", systemImage: "plus")
-                }
-            }
-        } detail: {
-            if let index = selectedProjectIndex {
-                ProjectDashboard(
-                    project: $projects[index],
-                    onImportLogic: { showLogicImporter = true },
-                    onImportLyrics: { showLyricsImporter = true },
-                    onAskMatamike: { showMatamike = true }
-                )
-            } else {
-                ContentUnavailableView(
-                    "Select a song",
-                    systemImage: "music.note.list",
-                    description: Text("Import a Logic exchange package or create a new project.")
-                )
-            }
+        HStack(spacing: 0) {
+            AppSidebar(
+                projects: projects,
+                selection: $selection,
+                section: $section,
+                encoreCount: liveEntries.filter(\.isEncore).count,
+                onNewProject: addProject
+            )
+            .frame(width: 245)
+
+            Divider()
+
+            workspace
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(nsColor: .windowBackgroundColor))
+
+            Divider()
+
+            MatamikeChatView(
+                project: selectedProject,
+                availableProjects: projects,
+                compact: true,
+                onAction: handleMatamikeAction
+            )
+            .frame(width: 340)
+            .background(Color(nsColor: .controlBackgroundColor).opacity(0.55))
         }
-        .frame(minWidth: 980, minHeight: 640)
+        .frame(minWidth: 1260, minHeight: 720)
         .onAppear {
             selection = selection ?? projects.first?.id
         }
@@ -85,11 +73,8 @@ struct ContentView: View {
             allowsMultipleSelection: false,
             onCompletion: importLyrics
         )
-        .sheet(isPresented: $showMatamike) {
-            MatamikeChatView(project: selectedProject)
-        }
         .alert(
-            "Import failed",
+            "Import fehlgeschlagen",
             isPresented: Binding(
                 get: { importError != nil },
                 set: { if !$0 { importError = nil } }
@@ -97,7 +82,62 @@ struct ContentView: View {
         ) {
             Button("OK", role: .cancel) { importError = nil }
         } message: {
-            Text(importError ?? "Unknown error")
+            Text(importError ?? "Unbekannter Fehler")
+        }
+    }
+
+    @ViewBuilder
+    private var workspace: some View {
+        switch section {
+        case .overview:
+            OverviewView(
+                projects: projects,
+                selection: $selection,
+                onImportLogic: { showLogicImporter = true },
+                onImportLyrics: { showLyricsImporter = true },
+                onOpenReferences: { section = .references },
+                onOpenStoryboard: { section = .storyboard }
+            )
+
+        case .song:
+            withSelectedProject { project in
+                SongDetailView(
+                    project: project,
+                    onImportLogic: { showLogicImporter = true },
+                    onImportLyrics: { showLyricsImporter = true }
+                )
+            }
+
+        case .references:
+            withSelectedProject { project in
+                ReferenceLibraryView(project: project)
+            }
+
+        case .storyboard:
+            withSelectedProject { project in
+                StoryboardView(project: project, renderQueue: renderQueue)
+            }
+
+        case .renderQueue:
+            RenderQueueView(model: renderQueue, projects: projects)
+
+        case .live:
+            LiveModeView(projects: projects, entries: $liveEntries)
+        }
+    }
+
+    @ViewBuilder
+    private func withSelectedProject<Content: View>(
+        @ViewBuilder content: (Binding<SongProject>) -> Content
+    ) -> some View {
+        if let index = selectedProjectIndex {
+            content($projects[index])
+        } else {
+            ContentUnavailableView(
+                "Kein Song ausgewählt",
+                systemImage: "music.note.list",
+                description: Text("Wähle links ein Projekt aus oder importiere einen Logic-Song.")
+            )
         }
     }
 
@@ -110,11 +150,27 @@ struct ContentView: View {
         return projects[index]
     }
 
+    private func addProject() {
+        let project = SongProject(title: "Neuer Song")
+        projects.append(project)
+        selection = project.id
+        section = .song
+    }
+
+    private func handleMatamikeAction(_ action: MatamikeAction) {
+        switch action {
+        case .addEncore(let projectID, let title):
+            guard !liveEntries.contains(where: { $0.projectID == projectID && $0.isEncore }) else { return }
+            liveEntries.append(LiveSetEntry(projectID: projectID, title: title, isEncore: true))
+        }
+    }
+
     private func importLogicPackage(_ result: Result<[URL], Error>) {
         guard case .success(let urls) = result, let url = urls.first else {
             if case .failure(let error) = result { importError = error.localizedDescription }
             return
         }
+
         let selectedID = selection
         let scoped = url.startAccessingSecurityScopedResource()
 
@@ -123,15 +179,31 @@ struct ContentView: View {
             do {
                 let package = try logicImporter.discoverPackage(at: url)
                 let imported = try await logicImporter.importProject(from: package)
+
                 if let index = projects.firstIndex(where: { $0.id == selectedID }) {
-                    var replacement = imported
-                    replacement.artist = projects[index].artist
-                    projects[index] = replacement
-                    selection = replacement.id
+                    let existing = projects[index]
+                    projects[index] = SongProject(
+                        id: existing.id,
+                        title: imported.title,
+                        artist: existing.artist,
+                        duration: imported.duration,
+                        bpm: imported.bpm,
+                        markers: imported.markers,
+                        lyrics: imported.lyrics.isEmpty ? existing.lyrics : imported.lyrics,
+                        references: existing.references,
+                        shots: existing.shots,
+                        masterAudioURL: imported.masterAudioURL,
+                        stemURLs: imported.stemURLs,
+                        midiURL: imported.midiURL,
+                        aafURL: imported.aafURL,
+                        waveform: imported.waveform
+                    )
+                    selection = existing.id
                 } else {
                     projects.append(imported)
                     selection = imported.id
                 }
+                section = .song
             } catch {
                 importError = error.localizedDescription
             }
@@ -149,182 +221,111 @@ struct ContentView: View {
 
         do {
             projects[index].lyrics = try lyricsImporter.parse(url: url)
+            section = .song
         } catch {
             importError = error.localizedDescription
         }
     }
 }
 
-private struct ProjectDashboard: View {
-    @Binding var project: SongProject
-    let onImportLogic: () -> Void
-    let onImportLyrics: () -> Void
-    let onAskMatamike: () -> Void
+private struct AppSidebar: View {
+    let projects: [SongProject]
+    @Binding var selection: SongProject.ID?
+    @Binding var section: WorkspaceSection
+    let encoreCount: Int
+    let onNewProject: () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(project.title)
-                            .font(.largeTitle.bold())
-                        Text(project.artist.isEmpty ? "No artist set" : project.artist)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button(action: onAskMatamike) {
-                        HStack(spacing: 8) {
-                            MatamikeAvatar(size: 34)
-                            Text("Ask Matamike")
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-
-                HStack(spacing: 16) {
-                    MetricCard(title: "Duration", value: format(project.duration))
-                    MetricCard(title: "Tempo", value: project.bpm.map { "\(Int($0.rounded())) BPM" } ?? "—")
-                    MetricCard(title: "Lyrics", value: "\(project.lyrics.count) lines")
-                    MetricCard(title: "Stems", value: "\(project.stemURLs.count)")
-                }
-
-                GroupBox("Audio") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if project.waveform.isEmpty {
-                            ContentUnavailableView(
-                                "No waveform yet",
-                                systemImage: "waveform",
-                                description: Text("Import a Logic exchange folder with a WAV, AIFF, M4A or CAF master.")
-                            )
-                            .frame(height: 120)
-                        } else {
-                            WaveformView(samples: project.waveform)
-                                .frame(height: 120)
-                        }
-
-                        if let master = project.masterAudioURL {
-                            Label(master.lastPathComponent, systemImage: "music.note")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 6)
-                }
-
-                GroupBox("Workflow") {
-                    HStack(spacing: 12) {
-                        Button(action: onImportLogic) {
-                            Label("Import Logic", systemImage: "square.and.arrow.down")
-                        }
-                        .buttonStyle(.borderedProminent)
-
-                        Button(action: onImportLyrics) {
-                            Label("Lyrics", systemImage: "text.quote")
-                        }
-                        .buttonStyle(.bordered)
-
-                        WorkflowButton("References", systemImage: "photo.on.rectangle.angled")
-                        WorkflowButton("Storyboard", systemImage: "rectangle.split.3x1")
-                        WorkflowButton("Generate Video", systemImage: "sparkles.tv")
-                    }
-                    .padding(.vertical, 8)
-                }
-
-                GroupBox("Song markers") {
-                    if project.markers.isEmpty {
-                        Text("No MIDI markers imported yet.")
-                            .foregroundStyle(.secondary)
-                            .padding(.vertical, 6)
-                    } else {
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(project.markers) { marker in
-                                HStack {
-                                    Text(format(marker.time))
-                                        .monospacedDigit()
-                                        .foregroundStyle(.secondary)
-                                        .frame(width: 70, alignment: .leading)
-                                    Text(marker.name)
-                                    Spacer()
-                                }
-                            }
-                        }
-                        .padding(.vertical, 6)
-                    }
-                }
-
-                GroupBox("Video pipeline") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Reference photos → storyboard → individual shots → review → final assembly")
-                        Text("The renderer stays provider-agnostic. Matamike can later use the same project context to help write prompts, plan shots and diagnose missing assets.")
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 6)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "waveform.path.ecg")
+                    .font(.title)
+                    .foregroundStyle(Color.accentColor)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Matalogic").font(.title2.bold())
+                    Text("Music · Video · Live").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .padding(28)
+            .padding(.horizontal, 14)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
+
+            ForEach(WorkspaceSection.allCases) { item in
+                Button {
+                    section = item
+                } label: {
+                    HStack {
+                        Image(systemName: item.systemImage).frame(width: 22)
+                        Text(item.label)
+                        Spacer()
+                        if item == .live && encoreCount > 0 {
+                            Text("\(encoreCount)")
+                                .font(.caption.bold())
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Color.accentColor, in: Capsule())
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(section == item ? Color.accentColor.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 9))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 8)
+            }
+
+            Divider().padding(.horizontal, 12)
+
+            Text("PROJEKTE")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 14)
+
+            ScrollView {
+                VStack(spacing: 4) {
+                    ForEach(projects) { project in
+                        Button {
+                            selection = project.id
+                            section = .song
+                        } label: {
+                            HStack {
+                                Image(systemName: "music.note")
+                                    .foregroundStyle(Color.accentColor)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(project.title).lineLimit(1)
+                                    if project.duration > 0 {
+                                        Text(format(project.duration))
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(selection == project.id ? Color.secondary.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 8)
+            }
+
+            Spacer(minLength: 8)
+
+            Button(action: onNewProject) {
+                Label("Neues Projekt", systemImage: "plus")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.bordered)
+            .padding(12)
         }
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.72))
     }
 
     private func format(_ seconds: TimeInterval) -> String {
         let total = max(0, Int(seconds.rounded()))
         return String(format: "%d:%02d", total / 60, total % 60)
-    }
-}
-
-private struct WaveformView: View {
-    let samples: [Float]
-
-    var body: some View {
-        Canvas { context, size in
-            guard !samples.isEmpty else { return }
-            let width = size.width / CGFloat(samples.count)
-            let middle = size.height / 2
-
-            for (index, sample) in samples.enumerated() {
-                let amplitude = max(1, CGFloat(sample) * middle)
-                let x = CGFloat(index) * width
-                var path = Path()
-                path.move(to: CGPoint(x: x, y: middle - amplitude))
-                path.addLine(to: CGPoint(x: x, y: middle + amplitude))
-                context.stroke(path, with: .foreground, lineWidth: max(1, width * 0.7))
-            }
-        }
-        .padding(.vertical, 8)
-        .accessibilityLabel("Audio waveform")
-    }
-}
-
-private struct MetricCard: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.title3.bold())
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
-    }
-}
-
-private struct WorkflowButton: View {
-    let title: String
-    let systemImage: String
-
-    init(_ title: String, systemImage: String) {
-        self.title = title
-        self.systemImage = systemImage
-    }
-
-    var body: some View {
-        Button(action: {}) {
-            Label(title, systemImage: systemImage)
-        }
-        .buttonStyle(.bordered)
     }
 }
