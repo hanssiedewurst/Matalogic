@@ -12,8 +12,10 @@ struct SongProject: Identifiable, Hashable, Sendable {
     var shots: [VideoShot]
     var masterAudioURL: URL?
     var stemURLs: [URL]
+    var trackAssets: [AudioTrackAsset]
     var midiURL: URL?
     var aafURL: URL?
+    var sourceFolderURL: URL?
     var waveform: [Float]
 
     init(
@@ -28,8 +30,10 @@ struct SongProject: Identifiable, Hashable, Sendable {
         shots: [VideoShot] = [],
         masterAudioURL: URL? = nil,
         stemURLs: [URL] = [],
+        trackAssets: [AudioTrackAsset] = [],
         midiURL: URL? = nil,
         aafURL: URL? = nil,
+        sourceFolderURL: URL? = nil,
         waveform: [Float] = []
     ) {
         self.id = id
@@ -43,9 +47,62 @@ struct SongProject: Identifiable, Hashable, Sendable {
         self.shots = shots
         self.masterAudioURL = masterAudioURL
         self.stemURLs = stemURLs
+        self.trackAssets = trackAssets
         self.midiURL = midiURL
         self.aafURL = aafURL
+        self.sourceFolderURL = sourceFolderURL
         self.waveform = waveform
+    }
+
+    var vocalTracks: [AudioTrackAsset] {
+        trackAssets.filter { $0.role == .leadVocal || $0.role == .backingVocal }
+    }
+}
+
+enum AudioTrackRole: String, CaseIterable, Hashable, Sendable, Identifiable {
+    case leadVocal
+    case backingVocal
+    case drums
+    case bass
+    case guitar
+    case keys
+    case synth
+    case percussion
+    case other
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .leadVocal: return "Lead Vocals"
+        case .backingVocal: return "Backing Vocals"
+        case .drums: return "Drums"
+        case .bass: return "Bass"
+        case .guitar: return "Gitarre"
+        case .keys: return "Keys"
+        case .synth: return "Synth"
+        case .percussion: return "Percussion"
+        case .other: return "Andere"
+        }
+    }
+}
+
+struct AudioTrackAsset: Identifiable, Hashable, Sendable {
+    let id: UUID
+    var name: String
+    var fileURL: URL
+    var role: AudioTrackRole
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        fileURL: URL,
+        role: AudioTrackRole = .other
+    ) {
+        self.id = id
+        self.name = name
+        self.fileURL = fileURL
+        self.role = role
     }
 }
 
