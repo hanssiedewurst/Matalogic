@@ -2,9 +2,26 @@
 
 ## Goal
 
-Matalogic is a native macOS companion for Logic Pro. Logic remains responsible for recording, editing, plugins, mixing and mastering. Matalogic owns the surrounding workflow: project metadata, lyrics, references, AI-assisted storyboarding, video generation and later live playback.
+Matalogic is a native macOS companion for Logic Pro. Logic remains responsible for recording, editing, plugins, mixing and mastering. Matalogic owns the surrounding workflow: project metadata, lyrics, references, AI-assisted storyboarding, video generation and live playback support.
 
-Matamike is the built-in assistant. He is represented as a skeleton with sombrero and guitar and receives the currently selected song as context. The first implementation is local and deterministic; the `MatamikeProviding` boundary allows a real LLM provider to be added later without changing the chat UI.
+Matamike is the built-in assistant. He is represented as a skeleton with sombrero and guitar and receives the currently selected song plus the available project list as context. The first implementation is local and deterministic; the `MatamikeProviding` boundary allows a real LLM provider to be added later without changing the chat UI or action system.
+
+## Current UI shell
+
+The app now uses a three-column layout:
+
+- left: navigation and project list
+- center: active workspace
+- right: persistent Matamike chat
+
+Current workspaces:
+
+- Overview
+- Song
+- References
+- Storyboard
+- Render Queue
+- Live Mode
 
 ## Current workflow
 
@@ -16,8 +33,9 @@ Matamike is the built-in assistant. He is represented as a skeleton with sombrer
 6. Add reference images categorized as person, outfit, location or style.
 7. Create storyboard shots with start time, duration, prompt and reference IDs.
 8. Submit individual shots to a `VideoProvider` implementation.
-9. Keep multiple takes per shot, approve one, then assemble all approved shots against the original master.
-10. Export 1080p/4K deliverables plus a movie suitable for reopening alongside the Logic project.
+9. Keep multiple takes per shot and approve one.
+10. Track jobs in a persistent Render Queue; Runway task IDs can be resumed after an interrupted app session.
+11. Later, assemble all approved shots against the original master and export the final movie.
 
 ## Logic import contract
 
@@ -48,15 +66,27 @@ MIDI is the primary source for tempo and marker timing. The parser currently sup
 
 ## Matamike boundary
 
-All assistant backends implement:
+Assistant backends return text plus optional structured actions:
 
 ```swift
 protocol MatamikeProviding: Sendable {
-    func reply(to message: String, project: SongProject?) async -> String
+    func reply(
+        to message: String,
+        project: SongProject?,
+        availableProjects: [SongProject]
+    ) async -> MatamikeReply
 }
 ```
 
-`LocalMatamikeProvider` currently answers project-aware questions about Logic import, lyrics, tempo/markers, project completeness and the video workflow. A network LLM adapter is a later milestone.
+`LocalMatamikeProvider` currently answers project-aware questions about Logic import, lyrics, tempo/markers, project completeness and the video workflow.
+
+Structured actions currently include quick encores. Example:
+
+```text
+Pack Midnight Highway als Zugabe rein
+```
+
+If the song title matches an existing project, Matamike emits an `addEncore` action and Live Mode receives the song immediately.
 
 ## Video provider boundary
 
@@ -69,13 +99,24 @@ protocol VideoProvider: Sendable {
 }
 ```
 
-This prevents provider-specific API formats from leaking into the domain model. Initial development uses `MockVideoProvider`; a real network adapter is the first planned visual-production integration.
+This prevents provider-specific API formats from leaking into the domain model.
+
+Current implementations:
+
+- `MockVideoProvider` for free UI/workflow testing
+- `RunwayVideoProvider` for real image-to-video generation
+
+The Runway adapter creates `/v1/image_to_video` tasks, stores the returned task ID immediately, then polls the task endpoint. Local reference images are encoded as data URIs. The render queue persists task IDs and attempts to resume interrupted Runway jobs when Matalogic starts again and an API key is available.
 
 ## Persistence plan
 
-Prototype: in-memory models.
+Current prototype:
 
-Next step: SwiftData for metadata plus a project package on disk for large media files.
+- song/project models: in memory
+- render queue: persisted in `UserDefaults`
+- large media: referenced by file URL
+
+Next persistence step: SwiftData for metadata plus a project package on disk for media copied into Matalogic ownership.
 
 Suggested package:
 
@@ -116,26 +157,33 @@ MySong.matalogic/
 - skeleton/sombrero/guitar avatar
 - selected-song context
 - local helper provider
+- structured assistant actions
+- quick encore insertion into Live Mode
 - provider boundary for a future LLM
 
-### Milestone 3 — visual production
+### Milestone 3 — visual production ✅
 - reference library with image import
 - storyboard editor
 - shot/take model
-- first real video provider adapter
-- render queue with resumable job state
-- Matamike-assisted prompt and shot planning
+- reference assignment per shot
+- first real video provider adapter (Runway)
+- mock provider for no-cost testing
+- persistent render queue with Runway task IDs
+- automatic resume of interrupted Runway polling
+- full three-column production UI
 
 ### Milestone 4 — finishing
 - timeline assembly
 - master-audio muxing
 - export presets
-- per-shot regeneration
+- local download of provider outputs before ephemeral URLs expire
+- improved per-shot regeneration and versioning
 
-### Later — live mode
+### Live mode expansion
 - backing tracks and stems
 - click/count-in routing
 - lyrics/teleprompter
 - video output
 - MIDI/timecode sync
 - optional DMX integration
+- dynamic setlist operations through Matamike
