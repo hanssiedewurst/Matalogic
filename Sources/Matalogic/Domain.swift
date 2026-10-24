@@ -75,11 +75,22 @@ struct LyricLine: Identifiable, Hashable, Sendable {
     }
 }
 
-enum VisualReferenceKind: String, CaseIterable, Hashable, Sendable {
+enum VisualReferenceKind: String, CaseIterable, Hashable, Sendable, Identifiable {
     case person
     case outfit
     case location
     case style
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .person: return "Person"
+        case .outfit: return "Outfit"
+        case .location: return "Location"
+        case .style: return "Stil"
+        }
+    }
 }
 
 struct VisualReference: Identifiable, Hashable, Sendable {
@@ -104,6 +115,41 @@ struct VisualReference: Identifiable, Hashable, Sendable {
     }
 }
 
+struct VideoTake: Identifiable, Hashable, Sendable {
+    enum Status: String, Hashable, Sendable {
+        case queued
+        case rendering
+        case ready
+        case failed
+    }
+
+    let id: UUID
+    var provider: String
+    var providerJobID: String?
+    var outputURL: URL?
+    var status: Status
+    var createdAt: Date
+    var errorMessage: String?
+
+    init(
+        id: UUID = UUID(),
+        provider: String,
+        providerJobID: String? = nil,
+        outputURL: URL? = nil,
+        status: Status = .queued,
+        createdAt: Date = Date(),
+        errorMessage: String? = nil
+    ) {
+        self.id = id
+        self.provider = provider
+        self.providerJobID = providerJobID
+        self.outputURL = outputURL
+        self.status = status
+        self.createdAt = createdAt
+        self.errorMessage = errorMessage
+    }
+}
+
 struct VideoShot: Identifiable, Hashable, Sendable {
     enum Status: String, Hashable, Sendable {
         case draft
@@ -120,6 +166,8 @@ struct VideoShot: Identifiable, Hashable, Sendable {
     var prompt: String
     var status: Status
     var referenceIDs: [UUID]
+    var takes: [VideoTake]
+    var selectedTakeID: UUID?
 
     init(
         id: UUID = UUID(),
@@ -127,7 +175,9 @@ struct VideoShot: Identifiable, Hashable, Sendable {
         duration: TimeInterval,
         prompt: String,
         status: Status = .draft,
-        referenceIDs: [UUID] = []
+        referenceIDs: [UUID] = [],
+        takes: [VideoTake] = [],
+        selectedTakeID: UUID? = nil
     ) {
         self.id = id
         self.start = start
@@ -135,5 +185,70 @@ struct VideoShot: Identifiable, Hashable, Sendable {
         self.prompt = prompt
         self.status = status
         self.referenceIDs = referenceIDs
+        self.takes = takes
+        self.selectedTakeID = selectedTakeID
+    }
+}
+
+struct RenderQueueItem: Identifiable, Hashable, Sendable {
+    enum Status: String, Hashable, Sendable {
+        case queued
+        case rendering
+        case ready
+        case failed
+    }
+
+    let id: UUID
+    let projectID: UUID
+    let shotID: UUID
+    let takeID: UUID
+    var providerName: String
+    var status: Status
+    var providerJobID: String?
+    var outputURL: URL?
+    var errorMessage: String?
+
+    init(
+        id: UUID = UUID(),
+        projectID: UUID,
+        shotID: UUID,
+        takeID: UUID,
+        providerName: String,
+        status: Status = .queued,
+        providerJobID: String? = nil,
+        outputURL: URL? = nil,
+        errorMessage: String? = nil
+    ) {
+        self.id = id
+        self.projectID = projectID
+        self.shotID = shotID
+        self.takeID = takeID
+        self.providerName = providerName
+        self.status = status
+        self.providerJobID = providerJobID
+        self.outputURL = outputURL
+        self.errorMessage = errorMessage
+    }
+}
+
+struct LiveSetEntry: Identifiable, Hashable, Sendable {
+    let id: UUID
+    let projectID: UUID
+    var title: String
+    var isEncore: Bool
+    var addedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        projectID: UUID,
+        title: String,
+        isEncore: Bool = false,
+        addedAt: Date = Date()
+    ) {
+        self.id = id
+        self.projectID = projectID
+        self.title = title
+        self.isEncore = isEncore
+        self.addedAt = addedAt
     }
 }
