@@ -1,0 +1,34 @@
+name: Swift CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feature/**
+
+jobs:
+  test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+      - name: Build universal macOS app
+        run: bash scripts/build-universal-app.sh
+      - name: Verify universal binary
+        run: |
+          ARCHS="$(lipo -archs dist/Matalogic.app/Contents/MacOS/Matalogic)"
+          echo "$ARCHS"
+          [[ "$ARCHS" == *"x86_64"* ]]
+          [[ "$ARCHS" == *"arm64"* ]]
+      - name: Upload universal app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Matalogic-universal
+          path: dist/Matalogic-universal.zip
+          if-no-files-found: error
