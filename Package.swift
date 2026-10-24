@@ -13,6 +13,11 @@ let package = Package(
         .executableTarget(
             name: "Matalogic",
             path: "Sources/Matalogic"
+        ),
+        .testTarget(
+            name: "MatalogicTests",
+            dependencies: ["Matalogic"],
+            path: "Tests/MatalogicTests"
         )
     ]
 )
