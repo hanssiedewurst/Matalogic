@@ -25,11 +25,13 @@ struct ContentView: View {
     @State private var showExchange = false
     @State private var importError: String?
     @State private var liveEntries: [LiveSetEntry] = []
+    @State private var isTranscribingLyrics = false
     @StateObject private var renderQueue = RenderQueueModel()
     @StateObject private var sharedWorkspace = SharedWorkspaceModel()
 
     private let logicImporter = LogicImportService()
     private let lyricsImporter = LyricsImportService()
+    private let lyricsTranscriber = AppleSpeechLyricsTranscriber()
 
     var body: some View {
         HStack(spacing: 0) {
@@ -38,7 +40,11 @@ struct ContentView: View {
                 selection: $selection,
                 section: $section,
                 encoreCount: liveEntries.filter(\.isEncore).count,
+                canTranscribeVocals: !(selectedProject?.vocalTracks.isEmpty ?? true),
+                isTranscribingLyrics: isTranscribingLyrics,
                 onOpenExchange: { showExchange = true },
+                onTranscribeGerman: { transcribeSelectedVocal(localeIdentifier: "de-DE") },
+                onTranscribeEnglish: { transcribeSelectedVocal(localeIdentifier: "en-US") },
                 onNewProject: addProject
             )
             .frame(width: 245)
@@ -84,7 +90,7 @@ struct ContentView: View {
             .frame(minWidth: 940, minHeight: 650)
         }
         .alert(
-            "Import fehlgeschlagen",
+            "Matalogic",
             isPresented: Binding(
                 get: { importError != nil },
                 set: { if !$0 { importError = nil } }
@@ -242,6 +248,41 @@ struct ContentView: View {
             importError = error.localizedDescription
         }
     }
+
+    private func transcribeSelectedVocal(localeIdentifier: String) {
+        guard !isTranscribingLyrics,
+              let index = selectedProjectIndex else { return }
+
+        let project = projects[index]
+        guard let vocal = project.vocalTracks.first(where: { $0.role == .leadVocal }) ?? project.vocalTracks.first else {
+            importError = "Keine Vocal-Spur gefunden. Benenne die Gesangsspur in Logic z. B. „Lead Vocal“, „Vocals“, „Vox“ oder „Gesang“ und exportiere die Spuren erneut."
+            return
+        }
+
+        let projectID = project.id
+        let url = vocal.fileURL
+        let scoped = url.startAccessingSecurityScopedResource()
+        isTranscribingLyrics = true
+
+        Task {
+            defer {
+                if scoped { url.stopAccessingSecurityScopedResource() }
+                isTranscribingLyrics = false
+            }
+            do {
+                let lines = try await lyricsTranscriber.transcribe(
+                    url: url,
+                    locale: Locale(identifier: localeIdentifier)
+                )
+                if let currentIndex = projects.firstIndex(where: { $0.id == projectID }) {
+                    projects[currentIndex].lyrics = lines
+                    section = .song
+                }
+            } catch {
+                importError = error.localizedDescription
+            }
+        }
+    }
 }
 
 private struct AppSidebar: View {
@@ -249,7 +290,11 @@ private struct AppSidebar: View {
     @Binding var selection: SongProject.ID?
     @Binding var section: WorkspaceSection
     let encoreCount: Int
+    let canTranscribeVocals: Bool
+    let isTranscribingLyrics: Bool
     let onOpenExchange: () -> Void
+    let onTranscribeGerman: () -> Void
+    let onTranscribeEnglish: () -> Void
     let onNewProject: () -> Void
 
     var body: some View {
@@ -302,6 +347,27 @@ private struct AppSidebar: View {
                 .padding(.vertical, 8)
             }
             .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+
+            Menu {
+                Button("Deutsch", action: onTranscribeGerman)
+                Button("Englisch", action: onTranscribeEnglish)
+            } label: {
+                HStack {
+                    if isTranscribingLyrics {
+                        ProgressView().controlSize(.small).frame(width: 22)
+                        Text("Lyrics erkennen …")
+                    } else {
+                        Image(systemName: "waveform.and.mic").frame(width: 22)
+                        Text("Lyrics aus Vocals")
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+            .menuStyle(.borderlessButton)
+            .disabled(!canTranscribeVocals || isTranscribingLyrics)
             .padding(.horizontal, 8)
 
             Divider().padding(.horizontal, 12)
