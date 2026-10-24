@@ -1,21 +1,72 @@
 # Matalogic
 
-Matalogic is a macOS companion app for Logic Pro that connects music production, lyrics, visual references, AI video generation, and later live playback workflows.
+Matalogic is a native macOS companion for Logic Pro focused on song management, lyrics, AI-assisted music-video production and later live playback.
 
-## Product direction
+Logic remains the DAW. Matalogic handles the workflow around the song.
 
-Logic Pro remains the DAW. Matalogic manages the surrounding workflow:
+## Current prototype
 
-1. Import a Logic exchange package (master/stems, MIDI tempo + markers, optional AAF metadata).
-2. Import and align lyrics.
-3. Manage reference photos for people, outfits, and locations.
-4. Build an AI-assisted storyboard and shot list.
-5. Send shots to pluggable video-generation providers.
-6. Assemble approved takes against the original song.
-7. Export a finished music video and a Logic-compatible movie file.
+- native SwiftUI macOS app
+- Logic exchange-folder import
+- master audio duration + waveform
+- MIDI tempo + marker import
+- TXT/LRC/SRT lyrics import
+- stem discovery
+- provider-agnostic video-generation interface
+- **Matamike**, the built-in project assistant 💀🎸
 
-## Status
+## Logic handoff
 
-Early prototype / architecture phase.
+Export a folder from Logic with a structure similar to:
 
-The first implementation target is a native macOS app using Swift and SwiftUI. Audio and timeline functionality will use Apple media frameworks where practical, while video-generation services are isolated behind a provider protocol so models can be swapped without redesigning the app.
+```text
+My Song/
+├── Master.wav
+├── My Song.mid
+├── My Song.aaf       # optional
+├── lyrics.lrc        # optional
+└── Stems/
+    ├── Drums.wav
+    ├── Bass.wav
+    ├── Guitar.wav
+    └── Vocals.wav
+```
+
+Supported master/stem formats: WAV, AIF/AIFF, M4A and CAF.
+
+Matalogic currently uses Standard MIDI as the primary source for tempo and marker timing. AAF is retained for future metadata enrichment; `.logicx` is deliberately not reverse engineered.
+
+## Lyrics
+
+- `.txt` — plain lyric lines
+- `.lrc` — timed lyric lines
+- `.srt` — timed subtitle/lyric blocks
+
+## Matamike
+
+Matamike is Matalogic's assistant: a skeleton with sombrero and guitar. The current local provider can inspect the selected project and help with Logic import, lyrics, tempo/markers, missing assets and the video workflow.
+
+The assistant is isolated behind `MatamikeProviding`, so a network LLM can be connected later without replacing the chat UI.
+
+## Development
+
+Requirements:
+
+- macOS 14+
+- Swift 5.10+
+
+From the repository root:
+
+```bash
+swift build
+swift test
+swift run Matalogic
+```
+
+GitHub Actions runs build and parser tests on macOS for pull requests and feature-branch pushes.
+
+## Roadmap
+
+The next development milestone is visual production: reference-image management, storyboard editing, shot/take tracking, a real video provider and a resumable render queue.
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the current architecture and milestone plan.
