@@ -69,7 +69,7 @@ final class MatamikeChatModel: ObservableObject {
         let outgoing = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !outgoing.isEmpty, !isReplying else { return }
         input = ""
-        messages.append(M atamikeMessage(role: .user, text: outgoing))
+        messages.append(MatamikeMessage(role: .user, text: outgoing))
         isReplying = true
 
         Task {
@@ -111,7 +111,7 @@ struct MatamikeChatView: View {
                                 Spacer(minLength: 40)
                                 Text(message.text)
                                     .padding(10)
-                                    .background(.tint.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+                                    .background(Color.accentColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
                             }
                         }
                     }
@@ -140,7 +140,8 @@ struct MatamikeAvatar: View {
     var body: some View {
         ZStack {
             Circle().fill(.quaternary)
-            Text("💀").font(.system(size: size * 0.52))
+            Text("💀")
+                .font(.system(size: size * 0.52))
                 .offset(y: size * 0.03)
             SombreroShape()
                 .fill(.primary)
@@ -162,7 +163,10 @@ private struct SombreroShape: Shape {
         let brim = CGRect(x: 0, y: rect.height * 0.62, width: rect.width, height: rect.height * 0.30)
         path.addEllipse(in: brim)
         path.move(to: CGPoint(x: rect.width * 0.30, y: rect.height * 0.66))
-        path.addQuadCurve(to: CGPoint(x: rect.width * 0.70, y: rect.height * 0.66), control: CGPoint(x: rect.width * 0.50, y: -rect.height * 0.25))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.width * 0.70, y: rect.height * 0.66),
+            control: CGPoint(x: rect.width * 0.50, y: -rect.height * 0.25)
+        )
         path.closeSubpath()
         return path
     }
