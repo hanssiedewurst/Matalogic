@@ -42,11 +42,11 @@ struct StandardMIDIParser: Sendable {
         _ = try cursor.readUInt16()
         let trackCount = Int(try cursor.readUInt16())
         let division = try cursor.readUInt16()
-        guard division & 0x8000 == 0 else { throw MIDIParseError.unsupportedTiming }
+        guard division & 0x8000 == 0, division > 0 else { throw MIDIParseError.unsupportedTiming }
         let ppq = UInt64(division)
         if headerLength > 6 { try cursor.skip(Int(headerLength - 6)) }
 
-        var tempos: [TempoEvent] = [TempoEvent(tick: 0, microsecondsPerQuarter: 500_000)]
+        var tempos: [TempoEvent] = []
         var markers: [RawMarker] = []
 
         for _ in 0..<trackCount {
@@ -80,7 +80,9 @@ struct StandardMIDIParser: Sendable {
                     if type == 0x51, payload.count == 3 {
                         let value = (UInt32(payload[0]) << 16) | (UInt32(payload[1]) << 8) | UInt32(payload[2])
                         tempos.append(TempoEvent(tick: tick, microsecondsPerQuarter: value))
-                    } else if type == 0x06, let text = String(data: payload, encoding: .utf8), !text.isEmpty {
+                    } else if type == 0x06,
+                              let text = String(data: payload, encoding: .utf8),
+                              !text.isEmpty {
                         markers.append(RawMarker(tick: tick, name: text))
                     }
                 } else if status == 0xF0 || status == 0xF7 {
@@ -95,12 +97,17 @@ struct StandardMIDIParser: Sendable {
                 }
             }
 
+            guard cursor.position <= trackEnd else { throw MIDIParseError.truncated }
             if cursor.position < trackEnd { try cursor.skip(trackEnd - cursor.position) }
         }
 
-        tempos.sort { $0.tick < $1.tick }
-        let firstTempo = tempos.first(where: { $0.tick == 0 })?.microsecondsPerQuarter ?? 500_000
-        let bpm = 60_000_000.0 / Double(firstTempo)
+        tempos.sort { lhs, rhs in
+            if lhs.tick == rhs.tick { return false }
+            return lhs.tick < rhs.tick
+        }
+
+        let initialTempo = tempos.last(where: { $0.tick == 0 })?.microsecondsPerQuarter ?? 500_000
+        let bpm = 60_000_000.0 / Double(initialTempo)
 
         let converted = markers
             .map { SongMarker(name: $0.name, time: seconds(at: $0.tick, ppq: ppq, tempos: tempos)) }
