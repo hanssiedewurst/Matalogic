@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var section: WorkspaceSection = .overview
     @State private var showLogicImporter = false
     @State private var showLyricsImporter = false
+    @State private var showExchange = false
     @State private var importError: String?
     @State private var liveEntries: [LiveSetEntry] = []
     @StateObject private var renderQueue = RenderQueueModel()
@@ -37,6 +38,7 @@ struct ContentView: View {
                 selection: $selection,
                 section: $section,
                 encoreCount: liveEntries.filter(\.isEncore).count,
+                onOpenExchange: { showExchange = true },
                 onNewProject: addProject
             )
             .frame(width: 245)
@@ -74,6 +76,13 @@ struct ContentView: View {
             allowsMultipleSelection: false,
             onCompletion: importLyrics
         )
+        .sheet(isPresented: $showExchange) {
+            SharedWorkspaceView(model: sharedWorkspace) { url in
+                importLogicFolder(url, replaceSelected: false)
+                showExchange = false
+            }
+            .frame(minWidth: 940, minHeight: 650)
+        }
         .alert(
             "Import fehlgeschlagen",
             isPresented: Binding(
@@ -107,11 +116,6 @@ struct ContentView: View {
                     onImportLogic: { showLogicImporter = true },
                     onImportLyrics: { showLyricsImporter = true }
                 )
-            }
-
-        case .exchange:
-            SharedWorkspaceView(model: sharedWorkspace) { url in
-                importLogicFolder(url, replaceSelected: false)
             }
 
         case .references:
@@ -245,6 +249,7 @@ private struct AppSidebar: View {
     @Binding var selection: SongProject.ID?
     @Binding var section: WorkspaceSection
     let encoreCount: Int
+    let onOpenExchange: () -> Void
     let onNewProject: () -> Void
 
     var body: some View {
@@ -286,6 +291,18 @@ private struct AppSidebar: View {
                 .buttonStyle(.plain)
                 .padding(.horizontal, 8)
             }
+
+            Button(action: onOpenExchange) {
+                HStack {
+                    Image(systemName: "arrow.left.arrow.right.square").frame(width: 22)
+                    Text("Austausch")
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
 
             Divider().padding(.horizontal, 12)
 
