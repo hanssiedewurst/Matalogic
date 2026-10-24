@@ -34,7 +34,7 @@
       <div class="cards">
         <div class="card primary" id="heroImport"><div class="big">＋</div><strong>Song einlesen</strong><small>MP3, WAV, M4A, AAC, AIFF</small></div>
         <div class="card" onclick="showView('references')"><div class="big">▣</div><strong>Referenzen</strong><small>Personen, Outfit, Location</small></div>
-        <div class="card" onclick="showView('storyboard')"><div class="big">▤</div><strong>Storyboard</strong><small>Shots automatisch planen</small></div>
+        <div class="card" onclick="showView('storyboard')"><div class="big">▤</div><strong>Storyboard</strong><small>30–50 Shots mit Matamike</small></div>
         <div class="card" onclick="showView('live')"><div class="big">◉</div><strong>Live Mode</strong><small>Zugaben mit Matamike</small></div>
       </div>
       <div id="overviewProject"></div>
@@ -46,9 +46,9 @@
       <div class="drop" id="songDrop" style="margin-top:20px"><strong>Oder Song einfach hier hineinziehen</strong>Audio-Datei ablegen, Projektinformationen ergänzen und direkt testen.</div>
       <div class="bottomflow">
         <div class="step"><span class="n">1</span><b>Song</b>Audio einlesen</div>
-        <div class="step"><span class="n">2</span><b>Lyrics</b>Text ergänzen</div>
+        <div class="step"><span class="n">2</span><b>Lyrics</b>Text automatisch erkennen</div>
         <div class="step"><span class="n">3</span><b>Referenzen</b>Fotos wählen</div>
-        <div class="step"><span class="n">4</span><b>Storyboard</b>Shots planen</div>
+        <div class="step"><span class="n">4</span><b>Storyboard</b>30–50 Shots planen</div>
         <div class="step"><span class="n">5</span><b>Render</b>Takes erzeugen</div>
         <div class="step"><span class="n">6</span><b>Live</b>Set & Zugaben</div>
       </div>
@@ -88,12 +88,13 @@
       <div class="field"><label>BPM <span class="hint">optional</span></label><input id="projBpm" type="number" min="1" max="300" placeholder="120"></div>
       <div class="field"><label>Lyrics-Datei <span class="hint">optional</span></label><label class="btn">TXT / LRC / SRT auswählen<input id="lyricsFile" type="file" accept=".txt,.lrc,.srt,text/plain" hidden></label></div>
     </div>
-    <div class="field"><label>Lyrics</label><textarea id="projLyrics" rows="7" placeholder="Songtext hier einfügen oder Datei auswählen …"></textarea></div>
+    <div class="field"><label>Lyrics</label><textarea id="projLyrics" rows="7" placeholder="Songtext hier einfügen, Datei auswählen oder aus Audio erkennen …"></textarea></div>
     <label class="pill"><input type="checkbox" id="createAsNew" checked> Als neues Projekt anlegen</label>
     <div class="actions"><button class="btn" id="cancelModal">Abbrechen</button><button class="btn primary" id="saveProject">Projekt anlegen</button></div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js"></script>
+<script src="app.js?v=4"></script>
+<script src="ai-tools.js?v=1"></script>
 </body>
 </html>
