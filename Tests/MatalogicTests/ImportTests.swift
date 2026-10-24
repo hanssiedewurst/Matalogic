@@ -45,4 +45,20 @@ final class ImportTests: XCTestCase {
         XCTAssertEqual(result.markers[0].name, "Verse")
         XCTAssertEqual(result.markers[0].time, 0.5, accuracy: 0.001)
     }
+
+    func testMatamikeCanAddKnownSongAsEncore() async throws {
+        let song = SongProject(title: "Midnight Highway")
+        let reply = await LocalMatamikeProvider().reply(
+            to: "Pack Midnight Highway als Zugabe rein",
+            project: nil,
+            availableProjects: [song]
+        )
+
+        guard case .addEncore(let projectID, let title) = reply.action else {
+            return XCTFail("Expected an addEncore action")
+        }
+
+        XCTAssertEqual(projectID, song.id)
+        XCTAssertEqual(title, song.title)
+    }
 }
