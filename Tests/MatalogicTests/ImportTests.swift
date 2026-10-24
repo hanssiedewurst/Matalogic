@@ -28,8 +28,6 @@ final class ImportTests: XCTestCase {
     }
 
     func testMIDIImportParsesTempoAndMarker() throws {
-        // Format 0, one track, PPQ 480. Tempo 120 BPM at tick 0,
-        // then a marker named "Verse" at tick 480 (one quarter note = 0.5 s).
         let bytes: [UInt8] = [
             0x4D, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06,
             0x00, 0x00, 0x00, 0x01, 0x01, 0xE0,
@@ -44,6 +42,32 @@ final class ImportTests: XCTestCase {
         XCTAssertEqual(result.markers.count, 1)
         XCTAssertEqual(result.markers[0].name, "Verse")
         XCTAssertEqual(result.markers[0].time, 0.5, accuracy: 0.001)
+    }
+
+    func testLogicExportDiscoversVocalTracksAndSingerReferences() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let tracks = root.appendingPathComponent("Tracks", isDirectory: true)
+        let people = root.appendingPathComponent("References/People", isDirectory: true)
+        try fm.createDirectory(at: tracks, withIntermediateDirectories: true)
+        try fm.createDirectory(at: people, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        fm.createFile(atPath: root.appendingPathComponent("Master.wav").path, contents: Data())
+        fm.createFile(atPath: tracks.appendingPathComponent("Lead Vocal.wav").path, contents: Data())
+        fm.createFile(atPath: tracks.appendingPathComponent("Backing Vox.wav").path, contents: Data())
+        fm.createFile(atPath: tracks.appendingPathComponent("Drums.wav").path, contents: Data())
+        fm.createFile(atPath: people.appendingPathComponent("Singer A.jpg").path, contents: Data())
+
+        let package = try LogicImportService().discoverPackage(at: root)
+
+        XCTAssertEqual(package.masterAudioURL?.lastPathComponent, "Master.wav")
+        XCTAssertEqual(package.trackAssets.count, 3)
+        XCTAssertEqual(package.trackAssets.filter { $0.role == .leadVocal }.count, 1)
+        XCTAssertEqual(package.trackAssets.filter { $0.role == .backingVocal }.count, 1)
+        XCTAssertEqual(package.trackAssets.filter { $0.role == .drums }.count, 1)
+        XCTAssertEqual(package.references.count, 1)
+        XCTAssertEqual(package.references.first?.kind, .person)
     }
 
     func testMatamikeCanAddKnownSongAsEncore() async throws {
