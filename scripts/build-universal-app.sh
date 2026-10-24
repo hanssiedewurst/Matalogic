@@ -43,6 +43,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Matalogic erkennt Lyrics aus einer von dir ausgewählten Vocal-Spur.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>
