@@ -5,12 +5,16 @@ import SwiftUI
 final class RenderQueueModel: ObservableObject {
     @Published private(set) var items: [RenderQueueItem]
 
+    private static let persistenceKey = "matalogic.renderQueue.v1"
     private let defaults: UserDefaults
-    private let persistenceKey = "matalogic.renderQueue.v1"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        self.items = Self.loadItems(from: defaults, key: persistenceKey)
+        self.items = Self.loadItems(from: defaults, key: Self.persistenceKey)
+
+        Task { [weak self] in
+            await self?.resumeInterruptedRunwayTasks()
+        }
     }
 
     func render(
@@ -116,7 +120,7 @@ final class RenderQueueModel: ObservableObject {
     private func persist() {
         let payload = items.map(PersistedRenderQueueItem.init)
         guard let data = try? JSONEncoder().encode(payload) else { return }
-        defaults.set(data, forKey: persistenceKey)
+        defaults.set(data, forKey: Self.persistenceKey)
     }
 
     private static func loadItems(from defaults: UserDefaults, key: String) -> [RenderQueueItem] {
