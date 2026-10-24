@@ -1,6 +1,6 @@
 import Foundation
 
-struct LogicExchangePackage {
+struct LogicExchangePackage: Sendable {
     var rootURL: URL
     var masterAudioURL: URL?
     var midiURL: URL?
@@ -9,7 +9,7 @@ struct LogicExchangePackage {
     var lyricsURL: URL?
 }
 
-protocol LogicImporting {
+protocol LogicImporting: Sendable {
     func discoverPackage(at url: URL) throws -> LogicExchangePackage
     func importProject(from package: LogicExchangePackage) async throws -> SongProject
 }
@@ -30,6 +30,9 @@ enum LogicImportError: LocalizedError {
 
 struct LogicImportService: LogicImporting {
     private let fileManager = FileManager.default
+    private let audioService = AudioAnalysisService()
+    private let midiParser = StandardMIDIParser()
+    private let lyricsService = LyricsImportService()
 
     func discoverPackage(at url: URL) throws -> LogicExchangePackage {
         var isDirectory: ObjCBool = false
@@ -43,7 +46,11 @@ struct LogicImportService: LogicImporting {
             options: [.skipsHiddenFiles]
         )
 
-        let master = files.first { ["wav", "aif", "aiff", "m4a"].contains($0.pathExtension.lowercased()) }
+        let audioExtensions = ["wav", "aif", "aiff", "m4a", "caf"]
+        let master = files.first {
+            audioExtensions.contains($0.pathExtension.lowercased()) &&
+            !$0.lastPathComponent.lowercased().contains("stem")
+        }
         let midi = files.first { ["mid", "midi"].contains($0.pathExtension.lowercased()) }
         let aaf = files.first { $0.pathExtension.lowercased() == "aaf" }
         let lyrics = files.first { ["txt", "lrc", "srt"].contains($0.pathExtension.lowercased()) }
@@ -55,7 +62,7 @@ struct LogicImportService: LogicImporting {
                 at: stemsFolder,
                 includingPropertiesForKeys: nil,
                 options: [.skipsHiddenFiles]
-            ).filter { ["wav", "aif", "aiff", "m4a"].contains($0.pathExtension.lowercased()) }) ?? []
+            ).filter { audioExtensions.contains($0.pathExtension.lowercased()) }) ?? []
         } else {
             stems = []
         }
@@ -65,45 +72,49 @@ struct LogicImportService: LogicImporting {
             masterAudioURL: master,
             midiURL: midi,
             aafURL: aaf,
-            stemURLs: stems,
+            stemURLs: stems.sorted { $0.lastPathComponent < $1.lastPathComponent },
             lyricsURL: lyrics
         )
     }
 
     func importProject(from package: LogicExchangePackage) async throws -> SongProject {
-        guard package.masterAudioURL != nil else {
+        guard let masterAudioURL = package.masterAudioURL else {
             throw LogicImportError.missingAudio
         }
 
-        // TODO: Read duration from AVFoundation, then parse tempo/markers from MIDI.
-        // AAF is intentionally treated as optional enrichment rather than the primary project format.
+        let audio = try await audioService.analyze(url: masterAudioURL)
+        let midi = try package.midiURL.map(midiParser.parse)
+        let lyrics = try package.lyricsURL.map(lyricsService.parse) ?? []
+
         return SongProject(
             title: package.rootURL.lastPathComponent,
-            markers: [],
-            lyrics: package.lyricsURL.map(Self.readPlainLyrics) ?? []
+            duration: audio.duration,
+            bpm: midi?.bpm,
+            markers: midi?.markers ?? [],
+            lyrics: lyrics,
+            references: [],
+            shots: [],
+            masterAudioURL: masterAudioURL,
+            stemURLs: package.stemURLs,
+            midiURL: package.midiURL,
+            aafURL: package.aafURL,
+            waveform: audio.waveform
         )
-    }
-
-    private static func readPlainLyrics(from url: URL) -> [LyricLine] {
-        guard let content = try? String(contentsOf: url, encoding: .utf8) else { return [] }
-        return content
-            .split(whereSeparator: \.isNewline)
-            .map { LyricLine(text: String($0)) }
     }
 }
 
-struct VideoGenerationRequest {
+struct VideoGenerationRequest: Sendable {
     var shot: VideoShot
     var references: [VisualReference]
     var aspectRatio: String = "16:9"
 }
 
-struct VideoGenerationResult {
+struct VideoGenerationResult: Sendable {
     var providerJobID: String
     var outputURL: URL?
 }
 
-protocol VideoProvider {
+protocol VideoProvider: Sendable {
     var name: String { get }
     func generate(_ request: VideoGenerationRequest) async throws -> VideoGenerationResult
 }
