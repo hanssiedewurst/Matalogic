@@ -7,12 +7,17 @@ Logic remains the DAW. Matalogic handles the workflow around the song.
 ## Current prototype
 
 - native SwiftUI macOS app with a three-column workspace
-- Logic exchange-folder import
+- **Universal macOS build: Intel `x86_64` + Apple Silicon `arm64`**
+- deployment target macOS 13+
+- shared exchange-folder browser for two-Mac workflows
+- Logic exchange import from master + exported individual tracks
+- automatic Lead/Backing Vocal track detection from Logic track names
+- Apple Speech lyrics transcription from a detected vocal track (German/English beta)
 - master audio duration + waveform
 - MIDI tempo + marker import
 - TXT/LRC/SRT lyrics import
-- stem discovery
 - visual-reference library for people, outfits, locations and style
+- automatic reference discovery from the exchange folder
 - storyboard editor with per-shot prompts and reference assignment
 - multiple takes per shot with approval state
 - persistent render queue
@@ -20,42 +25,78 @@ Logic remains the DAW. Matalogic handles the workflow around the song.
 - **Matamike**, the built-in project assistant 💀🎸
 - Live Mode foundation with quick encores
 
-## UI
+## Supported Macs
 
-The current app shell has:
+The package targets macOS 13 or newer. CI builds one universal `.app` containing both:
 
-1. navigation and project list on the left
-2. the active workspace in the center
-3. Matamike permanently available on the right
+- `x86_64` for Intel Macs such as a 2019 iMac
+- `arm64` for Apple Silicon Macs
 
-Workspaces currently include Overview, Song, References, Storyboard, Render Queue and Live Mode.
+GitHub Actions verifies both architectures with `lipo` and uploads `Matalogic-universal.zip` as a workflow artifact.
+
+## Shared exchange workflow
+
+Both Macs can point Matalogic at the same folder on a NAS/SMB share, iCloud Drive, Dropbox or another shared filesystem. Matalogic stores the selected folder as a security-scoped bookmark and scans its child folders for Logic exports.
+
+Recommended layout:
+
+```text
+Matalogic Exchange/
+└── My Song/
+    ├── Master.wav
+    ├── My Song.mid
+    ├── My Song.aaf             # optional
+    ├── lyrics.lrc              # optional
+    ├── Tracks/
+    │   ├── Lead Vocal.wav
+    │   ├── Backing Vocal.wav
+    │   ├── Drums.wav
+    │   ├── Bass.wav
+    │   └── Guitar.wav
+    └── References/
+        ├── People/
+        ├── Outfits/
+        ├── Locations/
+        └── Style/
+```
+
+The track folder may also be named `Spuren`, `Stems`, `Audio` or `Audio Files`.
 
 ## Logic handoff
 
-Export a folder from Logic with a structure similar to:
+A practical Logic Pro workflow is:
 
-```text
-My Song/
-├── Master.wav
-├── My Song.mid
-├── My Song.aaf       # optional
-├── lyrics.lrc        # optional
-└── Stems/
-    ├── Drums.wav
-    ├── Bass.wav
-    ├── Guitar.wav
-    └── Vocals.wav
-```
+1. Export a normal stereo master/bounce into the song folder.
+2. Use **File → Export → All Tracks as Audio Files** for the individual tracks and place them in `Tracks/`.
+3. Export Standard MIDI when tempo and Logic markers should be transferred.
+4. Optionally export the project as AAF for richer track/position metadata later.
+5. Put singer/person/outfit/location/style reference images in the `References` folders.
 
-Supported master/stem formats: WAV, AIF/AIFF, M4A and CAF.
+Matalogic does not reverse engineer `.logicx` bundles. The interchange stays explicit and portable.
 
-Matalogic currently uses Standard MIDI as the primary source for tempo and marker timing. AAF is retained for future metadata enrichment; `.logicx` is deliberately not reverse engineered.
+Supported audio extensions in the importer include WAV, AIF/AIFF, M4A, CAF, MP3 and AAC. For production exchange, WAV or AIFF is preferred.
 
 ## Lyrics
+
+Lyrics can come from:
 
 - `.txt` — plain lyric lines
 - `.lrc` — timed lyric lines
 - `.srt` — timed subtitle/lyric blocks
+- a detected Logic vocal track using **Lyrics aus Vocals**
+
+Vocal detection recognizes common track names such as `Lead Vocal`, `Vocals`, `Vox`, `Gesang`, `Backing Vocal`, `BGV` and related variants. The first native transcription implementation uses Apple's Speech framework and groups recognized words into timed lyric lines. German and English are selectable in the UI.
+
+## Reference images
+
+References can be added manually in the References workspace or loaded automatically from the song's shared `References/` directory. Supported categories are:
+
+- Person / singer
+- Outfit
+- Location
+- Style
+
+These references are assigned to storyboard shots and later sent to compatible video providers.
 
 ## Matamike
 
@@ -67,11 +108,9 @@ Matamike also supports structured actions. For example:
 
 If the song exists in the project list, Matamike adds it directly to Live Mode as an encore.
 
-The assistant is isolated behind `MatamikeProviding`, so a network LLM can be connected later without replacing the chat UI or action system.
-
 ## Video generation
 
-Milestone 3 includes a real Runway provider using the current image-to-video API. Reference images are sent as data URIs and the returned task ID is written to the persistent render queue before polling begins.
+Milestone 3 includes a Runway provider using image-to-video. Reference images are sent as data URIs and the returned task ID is written to the persistent render queue before polling begins.
 
 Set the API key before launching Matalogic:
 
@@ -80,13 +119,13 @@ export RUNWAYML_API_SECRET="your-key"
 swift run Matalogic
 ```
 
-Without an API key, use the built-in Mock provider to test the complete storyboard and queue workflow without spending credits.
+Without an API key, use the built-in Mock provider to test the storyboard and queue workflow without spending credits.
 
 ## Development
 
 Requirements:
 
-- macOS 14+
+- macOS 13+
 - Swift 5.10+
 
 From the repository root:
@@ -97,14 +136,18 @@ swift test
 swift run Matalogic
 ```
 
-You can also open `Package.swift` directly in Xcode and run the `Matalogic` executable target.
+Build the universal app locally with:
 
-GitHub Actions runs build and tests on macOS for pull requests and feature-branch pushes.
+```bash
+bash scripts/build-universal-app.sh
+```
+
+The result is `dist/Matalogic-universal.zip`.
 
 ## Roadmap
 
-Milestones 1–3 now cover the project shell, real Logic handoff and visual-production workflow.
+Milestones 1–3 cover the project shell, Logic handoff and visual-production workflow. The current compatibility/shared-workspace work prepares Matalogic for an Intel iMac + Apple Silicon MacBook setup.
 
-Next is finishing: assembling approved takes on the song timeline, muxing the master audio, export presets and per-shot regeneration improvements. Live Mode will then expand into backing tracks, click/count-in, video output, teleprompter and timecode/MIDI sync.
+Next steps are shared project metadata persistence, stronger vocal transcription/optional source separation, finishing approved video takes against the master audio, and expansion of Live Mode into backing tracks, click/count-in, teleprompter, video output and MIDI/timecode sync.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the current architecture and milestone plan.
