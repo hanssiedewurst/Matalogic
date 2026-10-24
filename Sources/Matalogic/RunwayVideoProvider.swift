@@ -46,21 +46,29 @@ struct RunwayVideoProvider: VideoProvider {
     }
 
     func generate(_ request: VideoGenerationRequest) async throws -> VideoGenerationResult {
+        let taskID = try await start(request)
+        return try await resume(jobID: taskID)
+    }
+
+    func start(_ request: VideoGenerationRequest) async throws -> String {
         guard let apiKey, !apiKey.isEmpty else { throw ProviderError.missingAPIKey }
         guard let imageURL = request.references.compactMap(\.fileURL).first else {
             throw ProviderError.missingReferenceImage
         }
 
         let promptImage = try makeDataURI(for: imageURL)
-        let taskID = try await createTask(
+        return try await createTask(
             apiKey: apiKey,
             promptImage: promptImage,
             promptText: request.shot.prompt,
             ratio: runwayRatio(for: request.aspectRatio),
             duration: normalizedDuration(request.shot.duration)
         )
+    }
 
-        return try await waitForTask(id: taskID, apiKey: apiKey)
+    func resume(jobID: String) async throws -> VideoGenerationResult {
+        guard let apiKey, !apiKey.isEmpty else { throw ProviderError.missingAPIKey }
+        return try await waitForTask(id: jobID, apiKey: apiKey)
     }
 
     private func createTask(
