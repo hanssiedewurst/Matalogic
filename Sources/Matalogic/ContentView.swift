@@ -25,6 +25,7 @@ struct ContentView: View {
     @State private var importError: String?
     @State private var liveEntries: [LiveSetEntry] = []
     @StateObject private var renderQueue = RenderQueueModel()
+    @StateObject private var sharedWorkspace = SharedWorkspaceModel()
 
     private let logicImporter = LogicImportService()
     private let lyricsImporter = LyricsImportService()
@@ -108,6 +109,11 @@ struct ContentView: View {
                 )
             }
 
+        case .exchange:
+            SharedWorkspaceView(model: sharedWorkspace) { url in
+                importLogicFolder(url, replaceSelected: false)
+            }
+
         case .references:
             withSelectedProject { project in
                 ReferenceLibraryView(project: project)
@@ -133,10 +139,10 @@ struct ContentView: View {
         if let index = selectedProjectIndex {
             content($projects[index])
         } else {
-            ContentUnavailableView(
-                "Kein Song ausgewählt",
+            CompatUnavailableView(
+                title: "Kein Song ausgewählt",
                 systemImage: "music.note.list",
-                description: Text("Wähle links ein Projekt aus oder importiere einen Logic-Song.")
+                description: "Wähle links ein Projekt aus oder importiere einen Logic-Song."
             )
         }
     }
@@ -170,8 +176,11 @@ struct ContentView: View {
             if case .failure(let error) = result { importError = error.localizedDescription }
             return
         }
+        importLogicFolder(url, replaceSelected: true)
+    }
 
-        let selectedID = selection
+    private func importLogicFolder(_ url: URL, replaceSelected: Bool) {
+        let selectedID = replaceSelected ? selection : nil
         let scoped = url.startAccessingSecurityScopedResource()
 
         Task {
@@ -180,7 +189,8 @@ struct ContentView: View {
                 let package = try logicImporter.discoverPackage(at: url)
                 let imported = try await logicImporter.importProject(from: package)
 
-                if let index = projects.firstIndex(where: { $0.id == selectedID }) {
+                if let selectedID,
+                   let index = projects.firstIndex(where: { $0.id == selectedID }) {
                     let existing = projects[index]
                     projects[index] = SongProject(
                         id: existing.id,
@@ -190,12 +200,14 @@ struct ContentView: View {
                         bpm: imported.bpm,
                         markers: imported.markers,
                         lyrics: imported.lyrics.isEmpty ? existing.lyrics : imported.lyrics,
-                        references: existing.references,
+                        references: imported.references.isEmpty ? existing.references : imported.references,
                         shots: existing.shots,
                         masterAudioURL: imported.masterAudioURL,
                         stemURLs: imported.stemURLs,
+                        trackAssets: imported.trackAssets,
                         midiURL: imported.midiURL,
                         aafURL: imported.aafURL,
+                        sourceFolderURL: imported.sourceFolderURL,
                         waveform: imported.waveform
                     )
                     selection = existing.id
@@ -290,7 +302,7 @@ private struct AppSidebar: View {
                             section = .song
                         } label: {
                             HStack {
-                                Image(systemName: "music.note")
+                                Image(systemName: project.vocalTracks.isEmpty ? "music.note" : "music.mic")
                                     .foregroundStyle(Color.accentColor)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(project.title).lineLimit(1)
