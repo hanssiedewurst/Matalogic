@@ -148,6 +148,8 @@ The result is `dist/Matalogic-universal.zip`.
 
 Milestones 1–3 cover the project shell, Logic handoff and visual-production workflow. The current compatibility/shared-workspace work prepares Matalogic for an Intel iMac + Apple Silicon MacBook setup.
 
-Next steps are shared project metadata persistence, stronger vocal transcription/optional source separation, finishing approved video takes against the master audio, and expansion of Live Mode into backing tracks, click/count-in, teleprompter, video output and MIDI/timecode sync.
+The shared exchange folder currently synchronizes the **source material** (Logic exports, vocal tracks, MIDI/AAF and reference images). The next persistence step is a `.matalogic/project.json` sidecar in each song folder so corrected lyrics, storyboard decisions and Matalogic-only metadata also synchronize between both Macs.
+
+After that: finishing approved video takes against the master audio and expansion of Live Mode into backing tracks, click/count-in, teleprompter, video output and MIDI/timecode sync.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the current architecture and milestone plan.
