@@ -67,10 +67,11 @@ The track folder may also be named `Spuren`, `Stems`, `Audio` or `Audio Files`.
 A practical Logic Pro workflow is:
 
 1. Export a normal stereo master/bounce into the song folder.
-2. Use **File → Export → All Tracks as Audio Files** for the individual tracks and place them in `Tracks/`.
-3. Export Standard MIDI when tempo and Logic markers should be transferred.
-4. Optionally export the project as AAF for richer track/position metadata later.
-5. Put singer/person/outfit/location/style reference images in the `References` folders.
+2. Use **File → Export → All Tracks as Audio Files** (`⇧⌘E`) for the individual tracks and place them in `Tracks/`.
+3. For clean analysis/transcription, prefer WAV or AIFF, keep normalization off and avoid baking volume/pan automation unless that is intentional. Plug-ins can remain included when the vocal sound itself should be transcribed.
+4. Export Standard MIDI when tempo and Logic markers should be transferred. Standard MIDI carries marker names/positions and tempo changes.
+5. Optionally export the project as AAF for track/position references and volume automation.
+6. Put singer/person/outfit/location/style reference images in the `References` folders.
 
 Matalogic does not reverse engineer `.logicx` bundles. The interchange stays explicit and portable.
 
